@@ -6,7 +6,6 @@ import javax.xml.bind.DatatypeConverter;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.openhab.binding.balboa.internal.BalboaMessage.ToggleMessage.ToggleType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +30,37 @@ public class BalboaMessage {
         messageTypeMap.put(StatusUpdateMessage.MESSAGE_TYPE, StatusUpdateMessage.class);
         messageTypeMap.put(InformationResponseMessage.MESSAGE_TYPE, InformationResponseMessage.class);
         messageTypeMap.put(PanelConfigurationResponseMessage.MESSAGE_TYPE, PanelConfigurationResponseMessage.class);
+    }
+
+    /**
+     * The {@link ItemType} enumerates the items that can be read and potentially also toggled.
+     *
+     * @author CarlÖnnheim
+     *
+     */
+    public enum ItemType {
+        // @formatter:off
+        PUMP             ((byte) 0x04, BalboaProtocol.MAX_PUMPS),
+        LIGHT            ((byte) 0x11, BalboaProtocol.MAX_LIGHTS),
+        AUX              ((byte) 0x16, BalboaProtocol.MAX_AUX),
+        BLOWER           ((byte) 0x0c, 1),
+        MISTER           ((byte) 0x0e, 1),
+        TEMPERATURE_RANGE((byte) 0x50, 1),
+        HEAT_MODE        ((byte) 0x51, 1),
+        HOLD_MODE        ((byte) 0x3C, 1),
+        // Read only (address is zero)
+        PRIMING          ((byte) 0x00, 1),
+        HEATER           ((byte) 0x00, 1),
+        CIRCULATION      ((byte) 0x00, 1);
+        // @formatter:on
+
+        private final byte address;
+        public final int count;
+
+        private ItemType(byte address, int count) {
+            this.address = address;
+            this.count = count;
+        }
     }
 
     // All messages provide a message type code
@@ -118,35 +148,8 @@ public class BalboaMessage {
      */
     static public class ToggleMessage extends BalboaMessage implements BalboaMessage.Outbound {
         public static final int MESSAGE_TYPE = 0x0abf11;
-        private ToggleType type;
+        private ItemType type;
         private int index;
-
-        /**
-         * The {@link ToggleType} enumerates the items that can be toggled.
-         *
-         * @author CarlÖnnheim
-         *
-         */
-        public enum ToggleType {
-            // @formatter:off
-            PUMP             ((byte) 0x04, BalboaProtocol.MAX_PUMPS),
-            LIGHT            ((byte) 0x11, BalboaProtocol.MAX_LIGHTS),
-            AUX              ((byte) 0x16, BalboaProtocol.MAX_AUX),
-            BLOWER           ((byte) 0x0c, 1),
-            MISTER           ((byte) 0x0e, 1),
-            TEMPERATURE_RANGE((byte) 0x50, 1),
-            HEAT_MODE        ((byte) 0x51, 1),
-            HOLD_MODE        ((byte) 0x3C, 1);
-            // @formatter:on
-
-            private final byte address;
-            public final int count;
-
-            private ToggleType(byte address, int count) {
-                this.address = address;
-                this.count = count;
-            }
-        }
 
         /**
          * Construct a {@link ToggleMessage} for the given ToggleType and index.
@@ -154,7 +157,11 @@ public class BalboaMessage {
          * @param type the ToggleMessage to create a message for.
          * @param index the index to create a message for.
          */
-        public ToggleMessage(ToggleType type, int index) {
+        public ToggleMessage(ItemType type, int index) {
+            // Make sure we are not trying to toggle a read only state
+            if (type.address == 0x00) {
+                throw new IllegalArgumentException("Attempt to toggle a read only state");
+            }
             // Make sure it does not go out of bounds
             if (index < 0 || index >= type.count) {
                 throw new IllegalArgumentException("Index out of bounds");
@@ -194,20 +201,20 @@ public class BalboaMessage {
             if (celcius) {
                 multiplier = 2;
                 if (highRange) {
+                    low = 26.5;
+                    high = 40;
+                } else {
                     low = 10;
                     high = 26;
-                } else {
-                    low = 26;
-                    high = 40;
                 }
             } else {
                 multiplier = 1;
                 if (highRange) {
+                    low = 79;
+                    high = 104;
+                } else {
                     low = 50;
                     high = 80;
-                } else {
-                    low = 80;
-                    high = 104;
                 }
             }
 
@@ -335,7 +342,7 @@ public class BalboaMessage {
         private boolean celcius, time24h, temperatureHighRange, priming, mister, circulation;
         byte timeHour, timeMinute;
         double currentTemperature, targetTemperature;
-        byte readyState, heatState, filterMode;
+        byte readyState, heatState, filterState;
 
         /**
          * Instantiates a {@link StatusUpdateMessage} from a raw data buffer
@@ -381,7 +388,7 @@ public class BalboaMessage {
             // Byte 13: unknown
             // Byte 14: Bit 0: Celcius (otherwise Fahrenheit - determined above), 1: 24h-clock, 2-3: Filter Mode
             time24h = (buffer[14] & 0x02) != 0;
-            filterMode = (byte) ((buffer[14] >> 2) & 0x03);
+            filterState = (byte) ((buffer[14] >> 2) & 0x03);
             // Byte 15: Bit 0-1: unknown, 2: high range (otherwise low range), 3: unknown,
             // 4-5: heatState (off, low, high, ??), 6-7: unknown
             temperatureHighRange = (buffer[15] & 0x04) != 0;
@@ -432,7 +439,7 @@ public class BalboaMessage {
                             + "\n",
                     timeHour, timeMinute
                     , priming, celcius, time24h, temperatureHighRange, mister, circulation
-                    , blower, readyState, filterMode, heatState
+                    , blower, readyState, filterState, heatState
                     , currentTemperature, targetTemperature
                     , pumps
                     , lights
@@ -449,7 +456,7 @@ public class BalboaMessage {
          * @param index the index to return (PUMP, AUX and LIGHTS)
          * @return
          */
-        public byte getToggleItem(ToggleType item, int index) {
+        public byte getItem(ItemType item, int index) {
 
             switch (item) {
                 case PUMP:
@@ -476,8 +483,14 @@ public class BalboaMessage {
                     return (byte) (mister ? 0x01 : 0x00);
                 case TEMPERATURE_RANGE:
                     return (byte) (temperatureHighRange ? 0x01 : 0x00);
+                case CIRCULATION:
+                    return (byte) (circulation ? 0x01 : 0x00);
+                case HEATER:
+                    return heatState;
+                case PRIMING:
+                    return (byte) (priming ? 0x01 : 0x00);
 
-                // Not supported
+                // Not yet implemented
                 case HEAT_MODE:
                     return 0;
                 case HOLD_MODE:
@@ -485,6 +498,51 @@ public class BalboaMessage {
                 default:
                     return 0;
             }
+        }
+
+        /**
+         * Get the heat state
+         *
+         * @return
+         */
+        public byte getHeatState() {
+            return heatState;
+        }
+
+        /**
+         * Get the ready state
+         *
+         * @return
+         */
+        public byte getReadyState() {
+            return readyState;
+        }
+
+        /**
+         * Get whether the display is set to celcius
+         *
+         * @return
+         */
+        public boolean getCelciusDisplay() {
+            return celcius;
+        }
+
+        /**
+         * Get the filter state
+         *
+         * @return
+         */
+        public byte getFilterState() {
+            return filterState;
+        }
+
+        /**
+         * Get the temperatures
+         *
+         * @return
+         */
+        public double getTemperature(boolean target) {
+            return target ? targetTemperature : currentTemperature;
         }
     }
 
@@ -762,12 +820,12 @@ public class BalboaMessage {
         for (int i = 0; i < masked.length; i++) {
             // Break line every 8 bytes
             if (i % 8 == 0) {
-                s = s.concat(s1).concat(String.format("\n%02d ", i / 8));
+                s = s.concat(s1).concat(String.format("\n%1d0 ", i / 8));
                 s1 = "\n   ";
             }
             // Print the byte (blank for known positions)
             for (int b = 7; b >= 0; b--) {
-                s = s.concat((unknown[i] >> b) == 0 ? " " : ((masked[i] >> b) == 0) ? "0" : "1");
+                s = s.concat((unknown[i] & (0x01 << b)) == 0 ? " " : (masked[i] & (0x01 << b)) == 0 ? "0" : "1");
                 s1 = s1.concat(last == null ? " " : (last[i] & (0x01 << b)) == (masked[i] & (0x01 << b)) ? " " : "^");
             }
             s = s.concat(" ");

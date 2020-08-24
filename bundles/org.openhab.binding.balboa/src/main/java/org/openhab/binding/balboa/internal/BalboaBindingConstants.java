@@ -24,7 +24,7 @@ import org.eclipse.smarthome.core.thing.ThingTypeUID;
 @NonNullByDefault
 public class BalboaBindingConstants {
 
-    private static final String BINDING_ID = "balboa";
+    protected static final String BINDING_ID = "balboa";
 
     public static final Integer DEFAULT_PORT = 4257;
 
