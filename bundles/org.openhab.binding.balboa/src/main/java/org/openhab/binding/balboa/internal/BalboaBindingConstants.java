@@ -31,15 +31,4 @@ public class BalboaBindingConstants {
     // List of all Thing Type UIDs
     public static final ThingTypeUID THING_TYPE_BALBOA_IP = new ThingTypeUID(BINDING_ID, "balboa-ip");
 
-    // List of all Channel ids
-    public static final String CHANNEL_TARGET_TEMPEREATURE = "targetTemperature";
-    public static final String CHANNEL_CURRENT_TEMPERATURE = "currentTemperature";
-    public static final String CHANNEL_PRIMING = "priming";
-    public static final String CHANNEL_CIRCULATION_PUMP = "circulationPump";
-    public static final String CHANNEL_JET1 = "jet1";
-    public static final String CHANNEL_JET2 = "jet2";
-    public static final String CHANNEL_JET3 = "jet3";
-    public static final String CHANNEL_BLOWER = "blower";
-    public static final String CHANNEL_LIGHTS = "lights";
-
 }

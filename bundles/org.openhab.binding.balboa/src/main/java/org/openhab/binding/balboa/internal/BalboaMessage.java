@@ -19,6 +19,7 @@ public class BalboaMessage {
 
     private static final Logger logger = LoggerFactory.getLogger(BalboaMessage.class);
 
+    // Each subclass will override these
     public static final int MESSAGE_TYPE = 0;
     public static final int MESSAGE_LENGTH = 0;
 
@@ -63,13 +64,23 @@ public class BalboaMessage {
         }
     }
 
-    // All messages provide a message type code
+    /*
+     * Messages implement the following interfaces to identify their capabilities (inbound and/or outbound)
+     *
+     */
+
+    /**
+     * All messages provide a message type code
+     *
+     * @author CarlÖnnheim
+     *
+     */
     static private interface Message {
         public int getMessageType();
     }
 
     /**
-     * Messages wich can be sent the unit implement this message.
+     * Messages which can be sent to the unit implement this interface.
      *
      * @author CarlÖnnheim
      *
@@ -84,6 +95,19 @@ public class BalboaMessage {
     }
 
     /**
+     * Messages which can be received from the unit implement this interface.
+     *
+     * @author Carl Önnheim
+     *
+     */
+    static protected interface Inbound extends Message {
+    }
+
+    /*
+     * Implementation of outbound messages
+     */
+
+    /**
      * The {@link ConfigurationRequestMessage} messages are sent to query the device for its configuration.
      *
      * @author Carl Önnheim - Initial contribution
@@ -92,6 +116,9 @@ public class BalboaMessage {
         public static final int MESSAGE_TYPE = 0x0abf04;
         static final byte[] payload = new byte[0];
 
+        /**
+         * Payload is empty for this message
+         */
         @Override
         public byte[] getPayload() {
             return payload;
@@ -106,7 +133,12 @@ public class BalboaMessage {
     static public class SettingsRequestMessage extends BalboaMessage implements BalboaMessage.Outbound {
         public static final int MESSAGE_TYPE = 0x0abf22;
 
-        // Enumerate the different settings types we can request
+        /**
+         * Enumerates the differnt types of settings that can be requested
+         *
+         * @author CarlÖnnheim
+         *
+         */
         public enum SettingsType {
             // @formatter:off
             PANEL        (new byte[] { (byte) 0x00, (byte) 0x00, (byte) 0x01 }),
@@ -127,14 +159,17 @@ public class BalboaMessage {
         private SettingsType setting;
 
         /**
-         * Construct a {@link SettingsRequestMessage} for the given SettingType.
+         * Construct a {@link SettingsRequestMessage} for the given {@link SettingsType}.
          *
-         * @param setting the SettingType to create a message for.
+         * @param setting the {@link SettingsType} to request.
          */
         public SettingsRequestMessage(SettingsType setting) {
             this.setting = setting;
         }
 
+        /**
+         * Payload is static given the settings type
+         */
         @Override
         public byte[] getPayload() {
             return setting.payload;
@@ -162,7 +197,7 @@ public class BalboaMessage {
             if (type.address == 0x00) {
                 throw new IllegalArgumentException("Attempt to toggle a read only state");
             }
-            // Make sure it does not go out of bounds
+            // Make sure the index does not go out of bounds
             if (index < 0 || index >= type.count) {
                 throw new IllegalArgumentException("Index out of bounds");
             }
@@ -192,7 +227,8 @@ public class BalboaMessage {
          * Construct a {@link SetTemperatureMessage} for the given temperature.
          *
          * @param targetTemperature The temperature to set
-         * @param celcius Indicates if the temperature is expressed in celcius (otherwise fahrenheit)
+         * @param celcius Indicates if the temperature is expressed in celcius (otherwise fahrenheit). Note that this
+         *            must match the current display setting on the unit.
          * @param highRange Indicates if the temperature is in the high range (otherwise low range)
          */
         public SetTemperatureMessage(double targetTemperature, boolean celcius, boolean highRange) {
@@ -249,7 +285,7 @@ public class BalboaMessage {
         /**
          * Construct a {@link SetTemperatureScaleMessage}.
          *
-         * @param celcius Indicates if the temperature is expressed in celcius (otherwise fahrenheit)
+         * @param celcius Indicates if the temperature whall be expressed in celcius (otherwise fahrenheit)
          *
          */
         public SetTemperatureScaleMessage(boolean celcius) {
@@ -317,14 +353,10 @@ public class BalboaMessage {
         }
     }
 
-    /**
-     * Messages wich can be received from the unit implement this message.
-     *
-     * @author CarlÖnnheim
-     *
+    /*
+     * Implementation of inbound messages. Each is expected to have a constructor taking a raw message buffer as its
+     * only parameter.
      */
-    static protected interface Inbound extends Message {
-    }
 
     /**
      * The {@link StatusUpdateMessage} messages are sent repeatedly by the control unit.
@@ -366,7 +398,7 @@ public class BalboaMessage {
                     };
             // @formatter:on
 
-            // Determine the temperature scale first (since used on other items)
+            // Determine the temperature scale first (cannot come in byte order since used on other items)
             celcius = (buffer[14] & 0x01) != 0;
 
             // Byte 0: start mark
@@ -394,11 +426,16 @@ public class BalboaMessage {
             temperatureHighRange = (buffer[15] & 0x04) != 0;
             heatState = (byte) ((buffer[15] >> 4) & 0x03);
             // Byte 16-17: Pump states. 2 bits per pump like so: P3P2P1P0 P5xxxxP4 (Byte16 Byte17).
-            // Each encodes off,low,high,??. 1-speed pumps only off and high.
+            // Each encodes off,low,high,??. 1-speed pumps only off and on.
             for (int i = 0; i < BalboaProtocol.MAX_PUMPS; i++) {
-                pumps[i] = (byte) ((buffer[16 + i / 4] >> ((i % 4) * 2)) & 0x03);
+                // The bit shift goes 0, 2, 4, 6, 0, 6
+                int bit = (i % 4) * 2;
+                if (i == 5) {
+                    bit = 6;
+                }
+                pumps[i] = (byte) ((buffer[16 + i / 4] >> bit) & 0x03);
             }
-            // Byte 18: Bit 0 unknown, Bit 1 circulation, Bits 2-3 blower (off, low, medium, high)
+            // Byte 18: Bit 0 unknown, Bit 1 circulation, Bits 2-3 blower (off, low, medium, high?)
             circulation = (buffer[18] & 0x02) != 0;
             blower = (byte) ((buffer[18] >> 2) & 0x03);
             // Byte 19: Lights like so xxxxL1L0. (off, low, medium, high)
@@ -446,13 +483,14 @@ public class BalboaMessage {
                     , aux);
             // @formatter:on
 
-            traceUnknown(buffer, unknown);
+            // Trace changes on unknown bits
+            displayUnknownBits(buffer, unknown);
         }
 
         /**
          * Returns the state of a one- or two-state togglable item.
          *
-         * @param item type of the togglable. HEAT and HOLD modes are not supported
+         * @param item type of the togglable.
          * @param index the index to return (PUMP, AUX and LIGHTS)
          * @return
          */
@@ -490,7 +528,7 @@ public class BalboaMessage {
                 case PRIMING:
                     return (byte) (priming ? 0x01 : 0x00);
 
-                // Not yet implemented
+                // TODO: Understand what these signify and how to handle them.
                 case HEAT_MODE:
                     return 0;
                 case HOLD_MODE:
@@ -539,7 +577,8 @@ public class BalboaMessage {
         /**
          * Get the temperatures
          *
-         * @return
+         * @param target Set true if the target temperature is desired.
+         * @return the target temperature if called with true, otherwise the current temperature.
          */
         public double getTemperature(boolean target) {
             return target ? targetTemperature : currentTemperature;
@@ -559,6 +598,7 @@ public class BalboaMessage {
 
         public InformationResponseMessage(byte[] buffer) {
             logger.trace("Information Response received");
+            // TODO: Implement the parsing of this message and link to relevant channels.
         }
 
     }
@@ -590,25 +630,26 @@ public class BalboaMessage {
             pumps[3] = (byte) ((buffer[5] >> 6) & 0x03);
             pumps[4] = (byte) ((buffer[6] >> 2) & 0x03);
             pumps[5] = (byte) ((buffer[6] >> 6) & 0x03);
-            logger.trace("byte5..6 {} {}: Pumps {}", Integer.toBinaryString(buffer[5] & 0xFF),
+            logger.debug("Panel Configuration: byte5..6 {} {}: Pumps {}", Integer.toBinaryString(buffer[5] & 0xFF),
                     Integer.toBinaryString(buffer[6] & 0xFF), pumps);
 
             // Determine the lights configuration.
             lights[0] = (byte) (buffer[7] & 0x03);
             lights[1] = (byte) ((buffer[7] >> 6) & 0x03);
-            logger.trace("byte7 {}: Lights {}", Integer.toBinaryString(buffer[7] & 0xFF), lights);
+            logger.debug("Panel Configuration: byte7 {}: Lights {}", Integer.toBinaryString(buffer[7] & 0xFF), lights);
+
+            // Determine circulation and blower
+            blower = (byte) (buffer[8] & 0x03);
+            circulation = (byte) ((buffer[8] >> 6) & 0x03);
+            logger.debug("Panel Configuration: byte8 {}: circulation {}, blower {}",
+                    Integer.toBinaryString(buffer[8] & 0xFF), circulation, blower);
 
             // Determine the aux and mister configuration.
             aux[0] = (buffer[9] & 0x01) != 0;
             aux[1] = (buffer[9] & 0x02) != 0;
             mister = (byte) ((buffer[9] >> 4) & 0x03);
-            logger.trace("byte9 {}: AUX {}, mister {}", Integer.toBinaryString(buffer[9] & 0xFF), aux, mister);
-
-            // Determine circulation and blower
-            blower = (byte) (buffer[8] & 0x03);
-            circulation = (byte) ((buffer[8] >> 6) & 0x03);
-            logger.trace("byte8 {}: circulation {}, blower {}", Integer.toBinaryString(buffer[8] & 0xFF), circulation,
-                    blower);
+            logger.debug("Panel Configuration: byte9 {}: AUX {}, mister {}", Integer.toBinaryString(buffer[9] & 0xFF),
+                    aux, mister);
 
         }
 
@@ -680,29 +721,22 @@ public class BalboaMessage {
         public byte getMister() {
             return mister;
         }
-
-        // Show some samples (this is to be moved to a test suite or removed altogether)
-        /*
-         * static {
-         * showSample("7e0b0abf2e1500019000003c7e", "");
-         * showSample("7e0b0abf2e1a0001900000ac7e",
-         * "1 light, pump1 & 2 are 2-speed pumps, and pump 3 is only 1-speed, no mister or blower");
-         * showSample("7e0b0abf2e050001910000c97e", "");
-         *
-         * }
-         *
-         * private static void showSample(String config, String description) {
-         * logger.trace("Sample: {}", description);
-         * new PanelConfigurationResponseMessage(DatatypeConverter.parseHexBinary(config));
-         * }
-         */
     }
 
+    /**
+     * Constructs a {@link BalboaMessage}
+     */
     private BalboaMessage() {
     }
 
+    /**
+     * Constructs a {@link BalboaMessage} for an unrecognized message type and payload.
+     *
+     * @param messageType
+     * @param payload
+     */
     private BalboaMessage(int messageType, byte[] payload) {
-        logger.debug(String.format("Unrecognized Message type 0x%x: %s", messageType,
+        logger.trace(String.format("Unrecognized Message type 0x%x: %s", messageType,
                 DatatypeConverter.printHexBinary(payload)));
     }
 
@@ -713,6 +747,7 @@ public class BalboaMessage {
      */
     public int getMessageType() {
         try {
+            // Get the field through introspection, thus returning the overridden values in the subclasses.
             return this.getClass().getField("MESSAGE_TYPE").getInt(null);
         } catch (Throwable e) {
             return 0;
@@ -726,6 +761,7 @@ public class BalboaMessage {
      */
     static public int getMessageLength(Class<? extends BalboaMessage> cls) {
         try {
+            // Get the field through introspection, thus returning the overridden values in the subclasses.
             return cls.getField("MESSAGE_LENGTH").getInt(null);
         } catch (Throwable e) {
             return 0;
@@ -742,6 +778,7 @@ public class BalboaMessage {
         // Determine the message type (bitmasking 0xFF effectively treats the bytes as unsigned)
         int messageType = (buffer[2] & 0xFF) << 16 | (buffer[3] & 0xFF) << 8 | (buffer[4] & 0xFF);
 
+        // Check if it is implemented
         if (messageTypeMap.containsKey(messageType)) {
             // Lookup the class which handles the message type
             Class<? extends BalboaMessage> cls = messageTypeMap.get(messageType);
@@ -755,6 +792,7 @@ public class BalboaMessage {
             }
 
             try {
+                // Find the constructor and call it
                 return cls.getConstructor(byte[].class).newInstance(buffer);
             } catch (Throwable e) {
                 logger.debug("Failed to instantiate {}: {}", cls.getName(), e.getMessage());
@@ -766,15 +804,18 @@ public class BalboaMessage {
         }
     }
 
-    static HashMap<Integer, byte[]> lastMaskedBuffer = new HashMap<Integer, byte[]>();
+    /*
+     * Helpers to check if data on currently unknown bits in a message changes.
+     */
+    private static HashMap<Integer, byte[]> lastMaskedBuffer = new HashMap<Integer, byte[]>();
 
     /**
-     * Prints trace information about the message in buffer, masked to only show the unknown bits
+     * Prints information about the message in buffer, masked to only show the unknown bits
      *
      * @param buffer
      * @param unknown
      */
-    public void traceUnknown(byte[] buffer, byte[] unknown) {
+    protected void displayUnknownBits(byte[] buffer, byte[] unknown) {
         // No need to prepare the data if it is not going to be traced.
         if (!logger.isTraceEnabled()) {
             return;
@@ -795,16 +836,19 @@ public class BalboaMessage {
         }
 
         // Check if it is a change from the last message of the same type (same length and same checksum)
-        byte[] last = lastMaskedBuffer.get(messageType);
-        if (last != null && last.length == masked.length) {
-            int i = 0;
-            for (i = 0; i < masked.length; i++) {
-                if (masked[i] != last[i]) {
-                    break;
+        byte[] last = null;
+        if (lastMaskedBuffer.containsKey(messageType)) {
+            last = lastMaskedBuffer.get(messageType);
+            if (last.length == masked.length) {
+                int i = 0;
+                for (i = 0; i < masked.length; i++) {
+                    if (masked[i] != last[i]) {
+                        break;
+                    }
                 }
-            }
-            if (i >= masked.length) {
-                return;
+                if (i >= masked.length) {
+                    return;
+                }
             }
         }
 

@@ -29,7 +29,6 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.balboa.internal.BalboaMessage.PanelConfigurationResponseMessage;
 import org.openhab.binding.balboa.internal.BalboaMessage.SettingsRequestMessage.SettingsType;
-import org.openhab.binding.balboa.internal.BalboaMessage.StatusUpdateMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,11 +58,10 @@ public class BalboaProtocol {
     private Status status = Status.INITIAL;
 
     /**
-     * Constructor for {@link BalboaProtocol}
+     * Constructor for {@link BalboaProtocol} with a given {@link BalboaProtocol.Handler}
      *
      */
     public BalboaProtocol(BalboaProtocol.Handler handler) {
-        super();
         this.handler = handler;
     }
 
@@ -104,10 +102,19 @@ public class BalboaProtocol {
      *
      */
     public interface Handler {
-        // Callback for when the protocol transitions between states
+        /**
+         * Callback for when the protocol transitions between states
+         *
+         * @param status The new status
+         * @param detail A descriptive string of the status detail
+         */
         public void onStateChange(Status status, String detail);
 
-        // Callback for when the protocol receives a message
+        /**
+         * Callback for when the protocol receives a message
+         *
+         * @param message The received message
+         */
         public void onMessage(BalboaMessage message);
     }
 
@@ -122,10 +129,8 @@ public class BalboaProtocol {
 
         // Handle internal state updates after that
         switch (message.getMessageType()) {
-            case StatusUpdateMessage.MESSAGE_TYPE:
-                break;
             case PanelConfigurationResponseMessage.MESSAGE_TYPE:
-                setStatus(Status.ONLINE, "Configured with pumps, lights, ...");
+                setStatus(Status.ONLINE, "");
                 break;
             default:
                 break;
@@ -137,8 +142,9 @@ public class BalboaProtocol {
      * Returns if this {@link BalboaProtocol} will babble or not
      *
      * Balboa units provide status updates several times per second. All of them will be returned if the protocol is set
-     * to babble. Sequential messages with the same CRC value will be discarded otherwise. Since the CRC includes the
-     * message type and status updates include the clock to minute accuracy, it is in practice safe to discard these.
+     * to babble. Sequential messages with the same CRC value will be discarded otherwise. The CRC includes the
+     * message type and status updates include the clock to minute accuracy. It is thus in practice safe to discard
+     * these (status updates will come through at least once per minute anyway).
      *
      */
     public boolean babble() {
@@ -146,16 +152,17 @@ public class BalboaProtocol {
     }
 
     /**
-     * Sets the {@link BalboaProtocol} to babble or not
+     * Sets the {@link BalboaProtocol} to babble or not.
      *
-     * See the setter description for details.
-     *
+     * @param babble Set to true to not suppress repetitive messages.
      */
     public void babble(boolean babble) {
         this.babble = babble;
     }
 
-    // Initialize the crc lookup table
+    /**
+     * Initialize the crc lookup table
+     */
     static {
         crcTable = new byte[256];
         // Produce the result for all possible bytes
@@ -178,16 +185,16 @@ public class BalboaProtocol {
 
     }
 
-    // CRC calculation routine
+    /**
+     * CRC calculation routine
+     *
+     * @param buffer Shall contain a full message, including start and stop bytes.
+     * @return the CRC value, which is to be stored in the second last position of the buffer on complete messages.
+     */
     private static byte calculateCrc(byte[] buffer) {
-        // Sanity check
-        if (buffer.length < 1) {
-            throw new IllegalArgumentException("Tried to calculate CRC for a buffer with no data");
-        }
-
-        // Calculate the CRC
+        // Initialisation value
         byte crc = INIT;
-        // Start from the length byte (start + 1), exclude the last two bytes
+        // Start from the length byte (start + 1), exclude the last two bytes (CRC and stop byte)
         for (int i = 1; i < buffer.length - 2; i++) {
             crc = crcTable[(buffer[i] ^ crc) & 0xFF];
         }
@@ -205,22 +212,30 @@ public class BalboaProtocol {
         writer.sendMessage(message);
     }
 
-    private class Writer implements CompletionHandler<Integer, ByteBuffer> {
+    /**
+     * The inner {@link Writer} class provides queued access to the underlying socket.
+     *
+     * @author Carl Önnheim
+     *
+     */
+    private class Writer implements CompletionHandler<@Nullable Integer, ByteBuffer> {
 
         private LinkedList<ByteBuffer> queue = new LinkedList<ByteBuffer>();;
         private boolean writeInProgress = false;
 
-        public Writer() {
-        }
-
         /**
-         * Resets a {@link BalboaProtocol.Writer}, should be called between connects
+         * Resets a {@link BalboaProtocol.Writer}, should be called between connects (clears the queue).
          *
          */
         synchronized public void reset() {
             queue.clear();
         }
 
+        /**
+         * Sends a message to the balboa unit. Queues it if a write is already in progress
+         *
+         * @param message
+         */
         public void sendMessage(BalboaMessage.Outbound message) {
 
             // Get the payload
@@ -232,7 +247,8 @@ public class BalboaProtocol {
             // Allocate a buffer for the message including separators
             byte[] buffer = new byte[messageLength + 2];
 
-            // Message start
+            // Build up the full message
+            // Message start and length
             buffer[0] = MESSAGE_SEPARATOR;
             buffer[1] = messageLength;
             // Message type
@@ -244,6 +260,7 @@ public class BalboaProtocol {
             for (int i = 0; i < payload.length; i++) {
                 buffer[i + 5] = payload[i];
             }
+            // CRC
             buffer[messageLength] = calculateCrc(buffer);
             // Message end
             buffer[messageLength + 1] = MESSAGE_SEPARATOR;
@@ -253,11 +270,12 @@ public class BalboaProtocol {
             startWrite(ByteBuffer.wrap(buffer));
         }
 
+        /**
+         * Starts writing a prepared buffer. The write is queued if needed.
+         *
+         * @param buffer The buffer to write
+         */
         synchronized private void startWrite(ByteBuffer buffer) {
-            // We must be connected
-            if (socket == null) {
-                throw new IllegalStateException("Cannot send message while not connected");
-            }
 
             // Queue the item if writing is already in progress
             if (writeInProgress) {
@@ -266,17 +284,32 @@ public class BalboaProtocol {
                 // Otherwise start writing
                 logger.trace("Write session started");
                 writeInProgress = true;
-                socket.write(buffer, buffer, this);
+                if (socket != null) {
+                    socket.write(buffer, buffer, this);
+                } else {
+                    // Abort if we are not connected
+                    writeInProgress = false;
+                    throw new IllegalStateException("Cannot send message while not connected");
+                }
             }
         }
 
+        /**
+         * Completion handler. Makes sure the message was written in full and picks up the next message from the queue
+         * if any.
+         */
         @Override
-        synchronized public void completed(Integer result, ByteBuffer buffer) {
+        synchronized public void completed(@Nullable Integer result, ByteBuffer buffer) {
             // Check if the message was written in full, otherwise resume the write
             if (buffer.position() < buffer.limit()) {
                 logger.trace("Partial write, resuming");
-                socket.write(buffer, buffer, this);
-                return;
+                if (socket != null) {
+                    socket.write(buffer, buffer, this);
+                    return;
+                } else {
+                    // This cannot happen ("failed" would be called instead), but handled for style
+                    writeInProgress = false;
+                }
             }
 
             // Check if there is anything queued
@@ -285,10 +318,15 @@ public class BalboaProtocol {
                 logger.trace("Write session ended");
                 writeInProgress = false;
             } else {
-                // Otherwise, trigger the next write
+                // Something is on the queue, trigger the next write
                 logger.trace("Message queued, write session continued");
                 ByteBuffer b = queue.remove();
-                socket.write(b, b, this);
+                if (socket != null) {
+                    socket.write(b, b, this);
+                } else {
+                    // This cannot happen ("failed" would be called instead), but handled for style
+                    writeInProgress = false;
+                }
             }
         }
 
@@ -300,7 +338,13 @@ public class BalboaProtocol {
         }
     }
 
-    private class Reader implements CompletionHandler<Integer, @NonNull BalboaProtocol.Reader> {
+    /**
+     * The inner {@link Reader} class decodes messages from the underlying socket.
+     *
+     * @author Carl Önnheim
+     *
+     */
+    private class Reader implements CompletionHandler<@Nullable Integer, @NonNull BalboaProtocol.Reader> {
 
         private ByteBuffer readBuffer = ByteBuffer.allocate(BUF_SIZE);
         private byte lastCRC = 0;
@@ -314,20 +358,18 @@ public class BalboaProtocol {
         }
 
         /**
-         * Decodes {@link BalboaMessage} objects from a received buffer.
-         *
-         * @param data new data to decode
-         * @param dataLength number of valid bytes in the data
+         * The read completion handler decodes {@link BalboaMessage} objects from a received buffer.
          *
          */
         @Override
-        public void completed(Integer result, BalboaProtocol.Reader me) {
-            // Check if we are disconnected
-            if (result < 0) {
+        public void completed(@Nullable Integer result, BalboaProtocol.Reader me) {
+            // Negative number of bytes read means we lost the connection. Cleanup.
+            if (result == null || result < 0) {
                 disconnect();
+                return;
             }
 
-            // Limit the buffer at the end of the read and rewind to the start
+            // Limit the buffer at the end of the read and rewind to the start of the buffer.
             readBuffer.limit(readBuffer.position());
             readBuffer.rewind();
 
@@ -364,6 +406,7 @@ public class BalboaProtocol {
                 if (readBuffer.get(readBuffer.position() + messageLength - 2) == lastCRC && !babble
                         && status == Status.ONLINE) {
                     logger.trace("Suppressed repeated message");
+                    // Move to the next message
                     readBuffer.position(readBuffer.position() + messageLength);
                     continue;
                 }
@@ -373,7 +416,7 @@ public class BalboaProtocol {
                 message[0] = startByte;
                 message[1] = (byte) messageLength;
                 readBuffer.get(message, 2, messageLength);
-                logger.trace("Processing message: {}", DatatypeConverter.printHexBinary(message));
+                logger.debug("Processing message: {}", DatatypeConverter.printHexBinary(message));
 
                 // Check that there is a separator at the end.
                 if (message[message.length - 1] != MESSAGE_SEPARATOR) {
@@ -404,16 +447,16 @@ public class BalboaProtocol {
                 lastCRC = crc;
 
                 // Instantiate the message and callback if successful
-                BalboaMessage bMsg = BalboaMessage.fromBuffer(message);
-                if (bMsg != null) {
-                    onMessage(bMsg);
+                BalboaMessage balboaMessage = BalboaMessage.fromBuffer(message);
+                if (balboaMessage != null) {
+                    onMessage(balboaMessage);
                 }
             }
 
             // Prepare the buffer to receive more data
             if (readBuffer.position() < readBuffer.limit()
                     && (readBuffer.limit() < readBuffer.capacity() || readBuffer.position() > 0)) {
-                // There is unprocessed data on the buffer and room to fill up more
+                // There is unprocessed data on the buffer and room left (after or before the valid data).
                 readBuffer.compact();
                 readBuffer.limit(readBuffer.capacity());
             } else {
@@ -445,6 +488,12 @@ public class BalboaProtocol {
         }
     }
 
+    /**
+     * Sets the status internally and invokes the callback.
+     *
+     * @param status The status to set
+     * @param detail The detailed description
+     */
     private void setStatus(Status status, String detail) {
         this.status = status;
         handler.onStateChange(status, detail);
@@ -454,9 +503,9 @@ public class BalboaProtocol {
      * Connects a {@link BalboaProtocol} on the default port (4257)
      *
      * @param host the hostname or ip address of the control unit.
-     * @throws IOException
+     *
      */
-    public void connect(String host) throws IOException {
+    public void connect(String host) {
         // Connect to the default port
         connect(host, DEFAULT_PORT);
     }
@@ -467,11 +516,7 @@ public class BalboaProtocol {
      * @param host the hostname or ip address of the control unit.
      * @param port the port to connect to.
      */
-    // TODO: The completion handlers show warnings without this, should be a better way to fix
-    @SuppressWarnings("null")
     public synchronized void connect(String host, int port) {
-        // byte[] bbf = encode(new balboaMessage.SettingsRequestMessage(SettingsType.INFORMATION));
-        // logger.trace("{} bytes to Balboa Unit: {}", bbf.length, DatatypeConverter.printHexBinary(bbf));
 
         // Do nothing if a connection is already in progress
         if (status == Status.CONNECTING) {
@@ -481,7 +526,7 @@ public class BalboaProtocol {
         // Update status
         setStatus(Status.CONNECTING, "Connecting");
 
-        // Disconnect if we are already connected
+        // Disconnect first if we are already connected
         if (socket != null) {
             disconnect();
         }
@@ -498,7 +543,7 @@ public class BalboaProtocol {
         // Check that the resolution was successful
         if (hostAddress.isUnresolved()) {
             logger.debug("Failed to resolve host: {}", host);
-            handler.onStateChange(Status.ERROR, String.format("Failed to resolve host: %s", host));
+            handler.onStateChange(Status.ERROR, String.format("Failed to resolve %s", host));
             return;
         }
 
@@ -512,10 +557,9 @@ public class BalboaProtocol {
         }
         if (socket != null) {
             // Try to connect
-            logger.debug("Balboa protocol connecting");
-            socket.connect(hostAddress, this, new CompletionHandler<@NonNull Void, @NonNull BalboaProtocol>() {
+            socket.connect(hostAddress, this, new CompletionHandler<@Nullable Void, @NonNull BalboaProtocol>() {
                 @Override
-                public void completed(Void result, BalboaProtocol bp) {
+                public void completed(@Nullable Void result, BalboaProtocol bp) {
                     // We are connected, but not configured yet. Request the information and update status
                     writer.sendMessage(new BalboaMessage.SettingsRequestMessage(SettingsType.INFORMATION));
                     writer.sendMessage(new BalboaMessage.SettingsRequestMessage(SettingsType.PANEL));
@@ -523,17 +567,26 @@ public class BalboaProtocol {
 
                     // Start the reader
                     reader.start();
-
-                    // socket.write(ByteBuffer.wrap(DatatypeConverter.parseHexBinary("7E080ABF22020000897E")), bp,
                 }
 
                 @Override
                 public void failed(@Nullable Throwable exc, BalboaProtocol bp) {
                     // Failed to connect, report the error
-                    logger.debug("Connection Failed: {}", exc.getMessage());
-                    handler.onStateChange(Status.ERROR, String.format("Connection Failed: %s", exc.getMessage()));
+                    String detail;
+                    if (exc == null) {
+                        detail = "Connection Failed";
+                    } else {
+                        detail = String.format("Connection Failed: %s", exc.getMessage());
+                    }
+                    logger.debug(detail);
+                    setStatus(Status.ERROR, detail);
+                    // Mark the socket as not valid and reset the reader/writer
+                    socket = null;
+                    reader.reset();
+                    writer.reset();
                 }
             });
+            logger.debug("Balboa protocol connecting");
         }
     }
 
@@ -545,9 +598,9 @@ public class BalboaProtocol {
 
         if (socket != null) {
             // Close the socket. Not much to do with any errors here.
-            logger.debug("Balboa protocol disconnecting");
             try {
                 socket.close();
+                logger.debug("Balboa protocol disconnecting");
             } catch (IOException e) {
                 logger.warn("Failed to close the connection to the Balboa Control Unit: {}", e.getMessage());
             }
