@@ -1,56 +1,102 @@
 # Balboa Binding
 
-_Give some details about what this binding is meant for - a protocol, system, specific device._
-
-_If possible, provide some resources like pictures, a YouTube video, etc. to give an impression of what can be done with this binding. You can place such resources into a `doc` folder next to this README.md._
+This binding supports SPA control units from Balboa.
 
 ## Supported Things
 
-_Please describe the different supported things / devices within this section._
-_Which different types are supported, which models were tested etc.?_
-_Note that it is planned to generate some part of this based on the XML files within ```src/main/resources/ESH-INF/thing``` of your binding._
+The binding supports Balboa SPA Control units with a WIFI module. While there are several different types of control units, it is expected that they all adhere to the same basic protocol. This is however an assumption since the protocol is not publicly available. The protocol binding has so far been tested with the following control unit types:
+* BP20100G1
+
+The communication protocol with the control unit also includes mechanisms to determine what capabilities exist. The following table outlines what has been implemented and the testing state (help needed from owners of units with alternative configurations):
+
+Capability | Implemented Behavior | Tested
+---|---|---
+Pumps | Up to 6 pumps, each of which can be one- or two-speed | 3 one-speed pumps tested
+Lights | Up to 2 lights, each of which can be one- or two-levels | Single one-level light tested
+AUX | Up to 2 AUX channels with simple on/off state | Not tested
+Blower | Optional feature, one- or two-speed | One-speed tested
+Mister | Optional feature, one- or two-speed | Not tested
+Temperature Scale | Always present, Celcius or Fahrenheit | Tested
+Temperature Range | Always present, Low or High | Tested
+Current Temperature | Always present | Tested
+Target Temperature | Always present | Tested
+Heat Mode | Always present. Valid states are "Ready", "Rest" and "Ready in Rest". Only Ready and Rest can be set. | Tested
+Filter Status | Always present. Valid states are "Off", "Filter 1", "Filter 2" and "Filter 1+2" | Partially tested 
+Priming | Always present. Open (active) or Closed (not active) | Tested
+Circulation | Always present. Open (active) or Closed (not active) | Tested
+Heater | Always present. Open (active) or Closed (not active) | Tested
 
 ## Discovery
 
-_Describe the available auto-discovery features here. Mention for what it works and what needs to be kept in mind when using it._
+Discover is not yet supported for this binding. Manual Thing configuration is required.
 
 ## Binding Configuration
 
-_If your binding requires or supports general configuration settings, please create a folder ```cfg``` and place the configuration file ```<bindingId>.cfg``` inside it. In this section, you should link to this file and provide some information about the options. The file could e.g. look like:_
-
-```
-# Configuration for the Philips Hue Binding
-#
-# Default secret key for the pairing of the Philips Hue Bridge.
-# It has to be between 10-40 (alphanumeric) characters
-# This may be changed by the user for security reasons.
-secret=openHABSecret
-```
-
-_Note that it is planned to generate some part of this based on the information that is available within ```src/main/resources/ESH-INF/binding``` of your binding._
-
-_If your binding does not offer any generic configurations, you can remove this section completely._
+The binding does not need any configuration. If you are running this development version and want to help with the interpretation of the underlying protocol, the following log settings are recommended:
+* org.openhab.binding.balboa.internal.BalboaMessage: TRACE
+* org.openhab.binding.balboa.internal.BalboaProtocol: DEBUG
+* org.openhab.binding.balboa.internal.BalboaHandler: DEBUG
 
 ## Thing Configuration
 
-_Describe what is needed to manually configure a thing, either through the (Paper) UI or via a thing-file. This should be mainly about its mandatory and optional configuration parameters. A short example entry for a thing file can help!_
+Things can be configured in the Paper UI or in a things file looking like this
 
-_Note that it is planned to generate some part of this based on the XML files within ```src/main/resources/ESH-INF/thing``` of your binding._
+* The `host` parameter is mandatory. You can give an IP-address or a resolvable hostname.
+* The `reconnectInterval` is optional and determines for how long the binding will wait between reconnect attempts (default 30 seconds)
+* The `port` is optional and determines which port number the binding will connect to (defaults 4257).
 
 ## Channels
 
-_Here you should provide information about available channel types, what their meaning is and how they can be used._
+The following channels are always present on the thing once connected and configured.
 
-_Note that it is planned to generate some part of this based on the XML files within ```src/main/resources/ESH-INF/thing``` of your binding._
+Channel | Type | Description | Implemented Behavior | Tested
+---|---|---|---|---
+temperature-scale | String | Shows if the temperature scale is Celcius or Fahrenheit. Note that this affects how the unit itself displays temperature, but not how OpenHAB displays it. | Always present, Celcius or Fahrenheit | Tested
+temperature-range | String | Shows if the temperature scale is High or Low | Always present, Low or High | Tested
+current-temperature | Number:Temperature | Read Only. Shows the current temperature of the unit | Always present | Tested
+target-temperature | Number:Temperature | The target temperature | Always present | Tested
+heat-mode | String | Valid states are "Ready", "Rest" and "Ready in Rest". Only Ready and Rest can be set. | Always present | Tested
+filter-status | String | Read Only. Valid states are "Off", "Filter 1", "Filter 2" and "Filter 1+2" | Always present. | Partially tested 
+priming | Contact | Open (active) or Closed (not active) | Always present. | Tested
+circulation | Contact | Open (active) or Closed (not active) | Always present. | Tested
+heater | Contact | Open (active) or Closed (not active) | Always present. | Tested
 
-| channel  | type   | description                  |
-|----------|--------|------------------------------|
-| control  | Switch | This is the control channel  |
+The following channels are only present if the unit actually has the corresponding capability. Note that the channel type differs depending on the type of object (one- or two-speed).
+
+Channel | Type | Description | Implemented Behavior | Tested
+---|---|---|---|---
+pump-X | Switch or String | On/Off or Two-Speed pump number 1-6 | Up to 6 pumps, each of which can be one- or two-speed | 3 one-speed pumps tested
+light-X | Switch or String | On/Off or Two-Level light number 1-2 | Up to 2 lights, each of which can be one- or two-levels | Single one-level light tested
+aux-X | Switch | On/Off AUX channel 1-2 | Up to 2 AUX channels with simple on/off state | Not tested
+blower | Switch or String | On/Off or Two-Level blower | Optional feature, one- or two-speed | One-speed tested
+mister | Switch or String | On/Off or Two-Level blower | Optional feature, one- or two-speed | Not tested
 
 ## Full Example
 
-_Provide a full usage example based on textual configuration files (*.things, *.items, *.sitemap)._
+*.things:
 
-## Any custom content here!
+```
+Thing balboa:balboa-ip:hottub "Hot Tub" [ host="ip.of.my.spa", reconnectInterval=30, port=4257 ]
+```
 
-_Feel free to add additional sections for whatever you think should also be mentioned about your binding!_
+*.items
+```
+String TempScale "Temperature Scale" { channel="balboa:balboa-ip:hottub:temperature-scale" }
+String TempRange "Temperature Range" { channel="balboa:balboa-ip:hottub:temperature-range" }
+Number:Temperature CurrentTemp "Current Temperature" { channel="balboa:balboa-ip:hottub:current-temperature" }
+Number:Temperature TargetTemp "Target Temperature" { channel="balboa:balboa-ip:hottub:target-temperature" }
+String HeatMode "Heat Mode" { channel="balboa:balboa-ip:hottub:heat-mode" }
+String FilterStatus "Filter Status" { channel="balboa:balboa-ip:hottub:filter-status" }
+Contact Priming "Priming" { channel="balboa:balboa-ip:hottub:priming" }
+Contact Circulation "Circulation" { channel="balboa:balboa-ip:hottub:circulation" }
+Contact Heater "Heater" { channel="balboa:balboa-ip:hottub:heater" }
+
+Switch Pump1 "One Speed Pump" { channel="balboa:balboa-ip:hottub:pump-1" }
+String Pump2 "Two Speed Pump" { channel="balboa:balboa-ip:hottub:pump-2" }
+Switch Light1 "Lights" { channel="balboa:balboa-ip:hottub:light-1" }
+Switch Aux1 "Aux" { channel="balboa:balboa-ip:hottub:aux-1" }
+Switch Blower "Blower" { channel="balboa:balboa-ip:hottub:blower" }
+Switch Mister "Mister" { channel="balboa:balboa-ip:hottub:mister" }
+```
+
+
