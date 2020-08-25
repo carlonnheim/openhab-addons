@@ -1,6 +1,6 @@
 # Balboa Binding
 
-This binding supports SPA control units from Balboa.
+This binding supports spa control units from Balboa.
 
 ## Supported Things
 
@@ -8,7 +8,7 @@ The binding supports Balboa SPA Control units with a WIFI module. While there ar
 
 * BP20100G1
 
-The communication protocol with the control unit also includes mechanisms to determine what capabilities exist. The following table outlines what has been implemented and the testing state (help needed from owners of units with alternative configurations):
+The communication protocol with the control unit also includes mechanisms to determine what capabilities exist. The table in the Channels section outlines what has been implemented and the testing state (help is needed from owners of units with alternative configurations to test the binding):
 
 ## Discovery
 
@@ -24,7 +24,7 @@ The binding does not need any configuration. If you are running this development
 
 ## Thing Configuration
 
-Things can be configured in the Paper UI or in a things file looking like this
+Things can be configured in the Paper UI or in a things file using these paramters:
 
 * The `host` parameter is mandatory. You can give an IP-address or a resolvable hostname.
 * The `reconnectInterval` is optional and determines for how long the binding will wait between reconnect attempts (default 30 seconds)
