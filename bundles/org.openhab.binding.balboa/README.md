@@ -5,26 +5,10 @@ This binding supports SPA control units from Balboa.
 ## Supported Things
 
 The binding supports Balboa SPA Control units with a WIFI module. While there are several different types of control units, it is expected that they all adhere to the same basic protocol. This is however an assumption since the protocol is not publicly available. The protocol binding has so far been tested with the following control unit types:
+
 * BP20100G1
 
 The communication protocol with the control unit also includes mechanisms to determine what capabilities exist. The following table outlines what has been implemented and the testing state (help needed from owners of units with alternative configurations):
-
-Capability | Implemented Behavior | Tested
----|---|---
-Pumps | Up to 6 pumps, each of which can be one- or two-speed | 3 one-speed pumps tested
-Lights | Up to 2 lights, each of which can be one- or two-levels | Single one-level light tested
-AUX | Up to 2 AUX channels with simple on/off state | Not tested
-Blower | Optional feature, one- or two-speed | One-speed tested
-Mister | Optional feature, one- or two-speed | Not tested
-Temperature Scale | Always present, Celcius or Fahrenheit | Tested
-Temperature Range | Always present, Low or High | Tested
-Current Temperature | Always present | Tested
-Target Temperature | Always present | Tested
-Heat Mode | Always present. Valid states are "Ready", "Rest" and "Ready in Rest". Only Ready and Rest can be set. | Tested
-Filter Status | Always present. Valid states are "Off", "Filter 1", "Filter 2" and "Filter 1+2" | Partially tested 
-Priming | Always present. Open (active) or Closed (not active) | Tested
-Circulation | Always present. Open (active) or Closed (not active) | Tested
-Heater | Always present. Open (active) or Closed (not active) | Tested
 
 ## Discovery
 
@@ -33,6 +17,7 @@ Discover is not yet supported for this binding. Manual Thing configuration is re
 ## Binding Configuration
 
 The binding does not need any configuration. If you are running this development version and want to help with the interpretation of the underlying protocol, the following log settings are recommended:
+
 * org.openhab.binding.balboa.internal.BalboaMessage: TRACE
 * org.openhab.binding.balboa.internal.BalboaProtocol: DEBUG
 * org.openhab.binding.balboa.internal.BalboaHandler: DEBUG
@@ -80,6 +65,7 @@ Thing balboa:balboa-ip:hottub "Hot Tub" [ host="ip.of.my.spa", reconnectInterval
 ```
 
 *.items
+
 ```
 String TempScale "Temperature Scale" { channel="balboa:balboa-ip:hottub:temperature-scale" }
 String TempRange "Temperature Range" { channel="balboa:balboa-ip:hottub:temperature-range" }

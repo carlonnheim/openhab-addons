@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2010-2020 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.balboa.internal;
 
 import java.util.HashMap;
@@ -600,7 +612,6 @@ public class BalboaMessage {
             logger.trace("Information Response received");
             // TODO: Implement the parsing of this message and link to relevant channels.
         }
-
     }
 
     /**
@@ -650,7 +661,6 @@ public class BalboaMessage {
             mister = (byte) ((buffer[9] >> 4) & 0x03);
             logger.debug("Panel Configuration: byte9 {}: AUX {}, mister {}", Integer.toBinaryString(buffer[9] & 0xFF),
                     aux, mister);
-
         }
 
         /**
@@ -736,7 +746,7 @@ public class BalboaMessage {
      * @param payload
      */
     private BalboaMessage(int messageType, byte[] payload) {
-        logger.trace(String.format("Unrecognized Message type 0x%x: %s", messageType,
+        logger.trace("{}", String.format("Unrecognized Message type 0x%x: %s", messageType,
                 DatatypeConverter.printHexBinary(payload)));
     }
 
@@ -876,6 +886,6 @@ public class BalboaMessage {
             s1 = s1.concat(" ");
         }
         s = s.concat(s1);
-        logger.trace(s);
+        logger.trace("{}", s);
     }
 }

@@ -9,9 +9,6 @@
  * http://www.eclipse.org/legal/epl-2.0
  *
  * SPDX-License-Identifier: EPL-2.0
- *
- * Information on the Balboa protocol itself taken from https://github.com/ccutrer/balboa_worldwide_app
- *
  */
 package org.openhab.binding.balboa.internal;
 
@@ -135,7 +132,6 @@ public class BalboaProtocol {
             default:
                 break;
         }
-
     }
 
     /**
@@ -578,7 +574,7 @@ public class BalboaProtocol {
                     } else {
                         detail = String.format("Connection Failed: %s", exc.getMessage());
                     }
-                    logger.debug(detail);
+                    logger.debug("{}", detail);
                     setStatus(Status.ERROR, detail);
                     // Mark the socket as not valid and reset the reader/writer
                     socket = null;
@@ -617,5 +613,4 @@ public class BalboaProtocol {
 
         setStatus(Status.OFFLINE, "Disconnected");
     }
-
 }

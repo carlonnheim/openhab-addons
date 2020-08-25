@@ -212,7 +212,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             default:
                 break;
         }
-
     }
 
     /**
@@ -429,7 +428,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                     .withType(new ChannelTypeUID(BalboaBindingConstants.BINDING_ID, channelType));
             return builder.build();
         }
-
     }
 
     /**
@@ -523,7 +521,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             } else {
                 logger.warn("One-speed channel received update of type {}", command.getClass().getSimpleName());
             }
-
         }
 
         /**
@@ -540,7 +537,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                 updateState(getChannelUID(), state);
             }
         }
-
     }
 
     /**
@@ -604,7 +600,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             } else {
                 logger.warn("Two-speed channel received update of type {}", command.getClass().getSimpleName());
             }
-
         }
 
         /**
@@ -632,7 +627,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                 updateState(getChannelUID(), state);
             }
         }
-
     }
 
     /**
@@ -681,7 +675,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             } else {
                 logger.warn("Heat Mode channel received update of type {}", command.getClass().getSimpleName());
             }
-
         }
 
         /**
@@ -709,7 +702,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                 updateState(getChannelUID(), state);
             }
         }
-
     }
 
     /**
@@ -749,7 +741,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             } else {
                 logger.warn("Temperature Scale channel received update of type {}", command.getClass().getSimpleName());
             }
-
         }
 
         /**
@@ -765,7 +756,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                 updateState(getChannelUID(), celciusDisplay ? StringType.valueOf("C") : StringType.valueOf("F"));
             }
         }
-
     }
 
     /**
@@ -827,7 +817,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                         temperatureHighRange ? StringType.valueOf("HIGH") : StringType.valueOf("LOW"));
             }
         }
-
     }
 
     /**
@@ -874,7 +863,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                 logger.warn("{} received update of type {}", this.getChannelUID().getId(),
                         command.getClass().getSimpleName());
             }
-
         }
 
         /**
@@ -931,7 +919,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             } else {
                 logger.warn("Filter Status channel received update of type {}", command.getClass().getSimpleName());
             }
-
         }
 
         /**
@@ -962,5 +949,4 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
             }
         }
     }
-
 }

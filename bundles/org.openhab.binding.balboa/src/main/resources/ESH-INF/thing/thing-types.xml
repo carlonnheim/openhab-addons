@@ -37,7 +37,7 @@
 		<tags>
 			<tag>TargetTemperature</tag>
 		</tags>
-		<state step="0.5" pattern="%.1f %unit%" />
+		<state step="0.5" pattern="%.1f %unit%"/>
 	</channel-type>
 	<channel-type id="current-temperature">
 		<item-type>Number:Temperature</item-type>
@@ -46,25 +46,25 @@
 		<tags>
 			<tag>CurrentTemperature</tag>
 		</tags>
-		<state pattern="%.1f %unit%" readOnly="true" />
+		<state pattern="%.1f %unit%" readOnly="true"/>
 	</channel-type>
 	<channel-type id="priming">
 		<item-type>Contact</item-type>
 		<label>Priming</label>
 		<description>Priming</description>
-		<state readOnly="true" />
+		<state readOnly="true"/>
 	</channel-type>
 	<channel-type id="circulation">
 		<item-type>Contact</item-type>
 		<label>Circulation Pump</label>
 		<description>Circulation Pump</description>
-		<state readOnly="true" />
+		<state readOnly="true"/>
 	</channel-type>
 	<channel-type id="heater">
 		<item-type>Contact</item-type>
 		<label>Heater</label>
 		<description>Heater</description>
-		<state readOnly="true" />
+		<state readOnly="true"/>
 	</channel-type>
 	<channel-type id="pump1">
 		<item-type>Switch</item-type>

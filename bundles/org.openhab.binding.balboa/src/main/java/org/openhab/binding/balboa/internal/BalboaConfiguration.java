@@ -12,13 +12,16 @@
  */
 package org.openhab.binding.balboa.internal;
 
+import org.eclipse.jdt.annotation.NonNullByDefault;
+
 /**
  * The {@link BalboaConfiguration} class contains fields mapping thing configuration parameters.
  *
  * @author Carl Önnheim - Initial contribution
  */
+@NonNullByDefault
 public class BalboaConfiguration {
-    public String host;
+    public String host = "";
     public int port;
     public int reconnectInterval;
 }
