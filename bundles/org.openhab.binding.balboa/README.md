@@ -36,12 +36,12 @@ The following channels are always present on the thing once connected and config
 
 Channel | Type | Description | Implemented Behavior | Tested
 ---|---|---|---|---
-temperature-scale | String | Shows if the temperature scale is Celcius or Fahrenheit. Note that this affects how the unit itself displays temperature, but not how OpenHAB displays it. | Always present, Celcius or Fahrenheit | Tested
-temperature-range | String | Shows if the temperature scale is High or Low | Always present, Low or High | Tested
+temperature-scale | String | Shows if the temperature scale is Celcius or Fahrenheit. Note that this affects how the unit itself displays temperature, but not how OpenHAB displays it. Coded values are C: "Celcius" or F: "Fahrenheit" | Always present | Tested
+temperature-range | String | Shows if the temperature scale is HIGH: "High" or LOW: "Low" | Always present | Tested
 current-temperature | Number:Temperature | Read Only. Shows the current temperature of the unit | Always present | Tested
-target-temperature | Number:Temperature | The target temperature | Always present | Tested
-heat-mode | String | Valid states are "Ready", "Rest" and "Ready in Rest". Only Ready and Rest can be set. | Always present | Tested
-filter-status | String | Read Only. Valid states are "Off", "Filter 1", "Filter 2" and "Filter 1+2" | Always present. | Partially tested 
+target-temperature | Number:Temperature | The target temperature. Note that the unit will report temperature as unknown after long periods of no circulation. The binding will discard these and retain the last valid measurement. | Always present | Tested
+heat-mode | String | Valid states are READY: "Ready", REST: "Rest" and READY_IN_REST: "Ready in Rest". Only "Ready" and "Rest" can be set, trying to set "Ready in Rest" will transform into setting "Ready". | Always present | Tested
+filter | String | Read Only. Valid states are OFF: "Off", 1: "Filter 1", 2: "Filter 2" and 1+2: "Filter 1+2" | Always present. | Tested 
 priming | Contact | Open (active) or Closed (not active) | Always present. | Tested
 circulation | Contact | Open (active) or Closed (not active) | Always present. | Tested
 heater | Contact | Open (active) or Closed (not active) | Always present. | Tested
@@ -72,7 +72,7 @@ String TempRange "Temperature Range" { channel="balboa:balboa-ip:hottub:temperat
 Number:Temperature CurrentTemp "Current Temperature" { channel="balboa:balboa-ip:hottub:current-temperature" }
 Number:Temperature TargetTemp "Target Temperature" { channel="balboa:balboa-ip:hottub:target-temperature" }
 String HeatMode "Heat Mode" { channel="balboa:balboa-ip:hottub:heat-mode" }
-String FilterStatus "Filter Status" { channel="balboa:balboa-ip:hottub:filter-status" }
+String FilterStatus "Filter Status" { channel="balboa:balboa-ip:hottub:filter" }
 Contact Priming "Priming" { channel="balboa:balboa-ip:hottub:priming" }
 Contact Circulation "Circulation" { channel="balboa:balboa-ip:hottub:circulation" }
 Contact Heater "Heater" { channel="balboa:balboa-ip:hottub:heater" }
@@ -84,5 +84,3 @@ Switch Aux1 "Aux" { channel="balboa:balboa-ip:hottub:aux-1" }
 Switch Blower "Blower" { channel="balboa:balboa-ip:hottub:blower" }
 Switch Mister "Mister" { channel="balboa:balboa-ip:hottub:mister" }
 ```
-
-
