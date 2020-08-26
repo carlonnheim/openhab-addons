@@ -40,7 +40,7 @@ temperature-scale | String | Shows if the temperature scale is Celcius or Fahren
 temperature-range | String | Shows if the temperature scale is HIGH: "High" or LOW: "Low" | Always present | Tested
 current-temperature | Number:Temperature | Read Only. Shows the current temperature of the unit | Always present | Tested
 target-temperature | Number:Temperature | The target temperature. Note that the unit will report temperature as unknown after long periods of no circulation. The binding will discard these and retain the last valid measurement. | Always present | Tested
-heat-mode | String | Valid states are READY: "Ready", REST: "Rest" and READY_IN_REST: "Ready in Rest". Only "Ready" and "Rest" can be set, trying to set "Ready in Rest" will transform into setting "Ready". | Always present | Tested
+heat-mode | String | Valid states are READY: "Ready", REST: "Rest" and READY_IN_REST: "Ready in Rest". Only "Ready" and "Rest" can be set, trying to set "Ready in Rest" will transform into setting "Rest". The unit will report "Rest" or "Ready in Rest" while it is in "Rest" mode. | Always present | Tested
 filter | String | Read Only. Valid states are OFF: "Off", 1: "Filter 1", 2: "Filter 2" and 1+2: "Filter 1+2" | Always present. | Tested 
 priming | Contact | Open (active) or Closed (not active) | Always present. | Tested
 circulation | Contact | Open (active) or Closed (not active) | Always present. | Tested
