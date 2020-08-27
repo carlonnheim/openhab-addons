@@ -13,11 +13,13 @@
 package org.openhab.binding.balboa.internal;
 
 import java.util.HashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import javax.measure.quantity.Temperature;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.smarthome.core.library.types.OnOffType;
 import org.eclipse.smarthome.core.library.types.OpenClosedType;
 import org.eclipse.smarthome.core.library.types.QuantityType;
@@ -37,6 +39,7 @@ import org.eclipse.smarthome.core.types.Command;
 import org.eclipse.smarthome.core.types.RefreshType;
 import org.openhab.binding.balboa.internal.BalboaMessage.ItemType;
 import org.openhab.binding.balboa.internal.BalboaMessage.PanelConfigurationResponseMessage;
+import org.openhab.binding.balboa.internal.BalboaMessage.SettingsRequestMessage.SettingsType;
 import org.openhab.binding.balboa.internal.BalboaProtocol.Handler;
 import org.openhab.binding.balboa.internal.BalboaProtocol.Status;
 import org.slf4j.Logger;
@@ -56,9 +59,106 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
 
     // Instantiate a protocol with this instance as the handler (receiving callbacks)
     private BalboaProtocol protocol = new BalboaProtocol(this);
-    // These manage the reconnection attempts
-    private Runnable reconnect;
-    private boolean reconnectable;
+    // This manages the reconnection attempts
+    private ReconnectJob reconnectJob = new ReconnectJob();
+    // This is used to poll the unit for non-broadcast information and keeping the connection alive.
+    private PollingJob pollingJob = new PollingJob();
+
+    /**
+     * Helper class providing a thread safe reconnection mechanism.
+     *
+     * @author CarlÖnnheim
+     *
+     */
+    private class ReconnectJob implements Runnable {
+        private @Nullable ScheduledFuture<?> job;
+        private boolean enabled = false;
+
+        /**
+         * Enables the reconnection mechanism
+         */
+        public void enable() {
+            // Store the state
+            enabled = true;
+        }
+
+        /**
+         * Disables the reconnection mechanism
+         */
+        public void disable() {
+            // Cancel pending reconnects if disabled
+            if (job != null) {
+                job.cancel(true);
+                job = null;
+            }
+
+            // Store the state
+            enabled = false;
+        }
+
+        /**
+         * Schedules a reconnect if enabled and not already pending.
+         */
+        public synchronized void schedule() {
+            if (enabled && job == null && config.reconnectInterval > 0) {
+                job = scheduler.schedule(this, config.reconnectInterval, TimeUnit.SECONDS);
+                logger.debug("Reconnection attempt in {} seconds", config.reconnectInterval);
+            }
+        }
+
+        /**
+         * Performs the reconnect and marks the job as not pending
+         */
+        @Override
+        public synchronized void run() {
+            // Clear the job first since a new reconnect may be scheduled by the connect call
+            job = null;
+            logger.debug("Reconnecting...");
+            connect();
+        }
+    }
+
+    /**
+     * Helper class providing a thread safe polling mechanism.
+     *
+     * @author CarlÖnnheim
+     *
+     */
+    private class PollingJob implements Runnable {
+        private @Nullable ScheduledFuture<?> job;
+
+        /**
+         * Starts polling if not already active.
+         */
+        public synchronized void start() {
+            if (job == null && config.pollingInterval > 0) {
+                job = scheduler.scheduleWithFixedDelay(this, config.pollingInterval, config.pollingInterval,
+                        TimeUnit.SECONDS);
+                logger.debug("Polling started with {} seconds interval", config.pollingInterval);
+            }
+        }
+
+        /**
+         * Stops polling if active.
+         */
+        public synchronized void stop() {
+            if (job != null) {
+                job.cancel(true);
+                logger.debug("Polling stopped");
+                job = null;
+            }
+        }
+
+        /**
+         * Sends a polling packet
+         */
+        @Override
+        public void run() {
+            logger.trace("Polling the unit");
+            // Send an information request
+            protocol.sendMessage(new BalboaMessage.SettingsRequestMessage(SettingsType.INFORMATION));
+        }
+    }
 
     // We keep all channels in a hash map. It is easier to treat all channels the same way, since the majority are
     // dynamic.
@@ -91,18 +191,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
      */
     public BalboaHandler(Thing thing) {
         super(thing);
-
-        // Prepare the runnable that will perform reconnection attempts
-        BalboaHandler bh = this;
-        reconnect = new Runnable() {
-            @Override
-            public void run() {
-                logger.debug("Reconnecting...");
-                bh.connect();
-            }
-        };
-        // Reconnection attempts are not enabled on instantiation
-        reconnectable = false;
     }
 
     /**
@@ -116,6 +204,9 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
         // Initialize the status as UNKNOWN. The protocol will update the status in callbacks.
         updateStatus(ThingStatus.UNKNOWN);
 
+        // Allow reconnect attempts
+        reconnectJob.enable();
+
         // Connect the protocol
         connect();
     }
@@ -128,9 +219,6 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
         // Reread the configuration
         config = getConfigAs(BalboaConfiguration.class);
 
-        // Allow reconnect attempts
-        reconnectable = true;
-
         // Connect the protocol
         logger.info("Starting balboa protocol with {} at {}", config.host, config.port);
         protocol.connect(config.host, config.port);
@@ -141,8 +229,11 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
      */
     @Override
     public void dispose() {
+        // Stop any active polling job
+        pollingJob.stop();
+
         // Disallow reconnect attempts and disconnect
-        reconnectable = false;
+        reconnectJob.disable();
         protocol.disconnect();
     }
 
@@ -173,6 +264,10 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
      */
     @Override
     public void onStateChange(Status status, String detail) {
+        // Stop any active polling job before handling status transitions
+        pollingJob.stop();
+
+        // Handle the status transition
         switch (status) {
             case INITIAL:
                 // No action is required
@@ -183,31 +278,27 @@ public class BalboaHandler extends BaseThingHandler implements Handler {
                 updateStatus(ThingStatus.ONLINE, ThingStatusDetail.ONLINE.CONFIGURATION_PENDING, detail);
                 break;
             case ERROR:
-                // Report back to the framework that we have an error. Schedule a reconnect if we are not intended to be
-                // disconnected.
+                // Report back to the framework that we have an error. Schedule a reconnect
                 logger.debug("Balboa Protocol Error: {}", detail);
                 updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.OFFLINE.CONFIGURATION_ERROR, detail);
-                if (reconnectable) {
-                    scheduler.schedule(reconnect, config.reconnectInterval, TimeUnit.SECONDS);
-                    logger.debug("Reconnection attempt in {} seconds", config.reconnectInterval);
-                }
+                reconnectJob.schedule();
                 break;
             case OFFLINE:
-                logger.info("Balboa Protocol is Offline");
-                if (reconnectable) {
-                    // We only update status if we are not intentionally disconnected. Also try to reconnect.
+                // Schedule a reconnect (nothing will happen if reconnects are disabled)
+                reconnectJob.schedule();
+                // We only update status if we were online (we are in disposal otherwise).
+                if (this.getThing().getStatus() == ThingStatus.ONLINE) {
                     updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.OFFLINE.COMMUNICATION_ERROR, detail);
-                    scheduler.schedule(reconnect, config.reconnectInterval, TimeUnit.SECONDS);
-                    logger.debug("Reconnection attempt in {} seconds", config.reconnectInterval);
+                    logger.info("Balboa Protocol went Offline");
                 } else {
-                    // No further action is required if the disconnect was intentional (initiated by the framework by
-                    // calling dispose())
                     logger.debug("Balboa Protocol disconnected");
                 }
                 break;
             case ONLINE:
                 updateStatus(ThingStatus.ONLINE);
                 logger.info("Balboa Protocol is Online");
+                // Start sending poll messages
+                pollingJob.start();
                 break;
             default:
                 break;

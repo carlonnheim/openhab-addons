@@ -24,4 +24,5 @@ public class BalboaConfiguration {
     public String host = "";
     public int port;
     public int reconnectInterval;
+    public int pollingInterval;
 }

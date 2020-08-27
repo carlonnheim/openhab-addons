@@ -539,7 +539,7 @@ public class BalboaProtocol {
         // Check that the resolution was successful
         if (hostAddress.isUnresolved()) {
             logger.debug("Failed to resolve host: {}", host);
-            handler.onStateChange(Status.ERROR, String.format("Failed to resolve %s", host));
+            setStatus(Status.ERROR, String.format("Failed to resolve %s", host));
             return;
         }
 

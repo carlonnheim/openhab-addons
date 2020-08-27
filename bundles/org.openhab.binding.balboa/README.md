@@ -41,7 +41,7 @@ temperature-range | String | Shows if the temperature scale is High or Low | Alw
 current-temperature | Number:Temperature | Read Only. Shows the current temperature of the unit | Always present | Tested
 target-temperature | Number:Temperature | The target temperature | Always present | Tested
 heat-mode | String | Valid states are "Ready", "Rest" and "Ready in Rest". Only Ready and Rest can be set. | Always present | Tested
-filter-status | String | Read Only. Valid states are "Off", "Filter 1", "Filter 2" and "Filter 1+2" | Always present. | Partially tested 
+filter-status | String | Read Only. Valid states are "Off", "Filter 1", "Filter 2" and "Filter 1+2" | Always present. | Tested 
 priming | Contact | Open (active) or Closed (not active) | Always present. | Tested
 circulation | Contact | Open (active) or Closed (not active) | Always present. | Tested
 heater | Contact | Open (active) or Closed (not active) | Always present. | Tested
