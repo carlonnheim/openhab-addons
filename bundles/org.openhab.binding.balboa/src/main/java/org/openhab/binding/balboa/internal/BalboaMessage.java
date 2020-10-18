@@ -377,7 +377,7 @@ public class BalboaMessage {
      */
     static public class StatusUpdateMessage extends BalboaMessage implements BalboaMessage.Inbound {
         public static final int MESSAGE_TYPE = 0xffaf13;
-        public static final int MESSAGE_LENGTH = 34;
+        public static final int MESSAGE_LENGTH = 30;
 
         private byte[] pumps = new byte[BalboaProtocol.MAX_PUMPS];
         private byte[] lights = new byte[BalboaProtocol.MAX_LIGHTS];
@@ -467,10 +467,10 @@ public class BalboaMessage {
             targetTemperature = buffer[25] * (celcius ? 0.5 : 1.0);
             // Byte 26: unknown
             // Byte 27: unknown
-            // Byte 28: unknown
-            // Byte 29: unknown
-            // Byte 30: unknown
-            // Byte 31: unknown
+            // Byte 28: unknown -- Note that earlier message versions may be shorter (crc and end mark shifts up)
+            // Byte 29: unknown -- Note that earlier message versions may be shorter (crc and end mark shifts up)
+            // Byte 30: unknown -- Note that earlier message versions may be shorter (crc and end mark shifts up)
+            // Byte 31: unknown -- Note that earlier message versions may be shorter (crc and end mark shifts up)
             // Byte 32: crc
             // Byte 33: end mark
 
@@ -795,8 +795,8 @@ public class BalboaMessage {
 
             // Check that the buffer has the appropriate length
             int expectedLength = getMessageLength(cls);
-            if (buffer.length != expectedLength) {
-                logger.debug("Buffer length {} is not appropriate for a {}, expected {}", buffer.length, cls.getName(),
+            if (buffer.length < expectedLength) {
+                logger.debug("Buffer length {} is too short for a {}, need at least {}", buffer.length, cls.getName(),
                         expectedLength);
                 return null;
             }
